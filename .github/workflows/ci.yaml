@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: ./.github/actions/setup-nix
+      - name: Flake check (current system)
+        shell: bash
+        run: nix develop -c just check
+      - name: Evaluate all supported systems
+        shell: bash
+        run: nix develop -c nix flake show --all-systems
+      - name: Format check
+        shell: bash
+        run: nix develop -c nixfmt --check flake.nix
+      - name: Build codex for current system
+        shell: bash
+        run: nix develop -c just build
+      - name: Smoke run codex --version
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual=$(./result/bin/codex --version | rg -o '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+          expected=$(jq -re '.version' sources.json)
+          printf 'codex --version: actual=%s expected=%s\n' "$actual" "$expected"
+          [ "$actual" = "$expected" ] || { echo "version mismatch" >&2; exit 1; }
+      - name: Deno unit tests
+        shell: bash
+        run: nix develop -c deno test scripts/

@@ -1,0 +1,87 @@
+name: Update sources
+
+on:
+  schedule:
+    - cron: "23 19 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: ./.github/actions/setup-nix
+      - name: Run update script
+        id: update
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          result=$(nix develop -c just update)
+          printf '%s\n' "$result"
+          case "$result" in
+            changed|unchanged) ;;
+            *)
+              printf 'unexpected update-script output: %s\n' "$result" >&2
+              exit 1
+              ;;
+          esac
+          printf 'result=%s\n' "$result" >> "$GITHUB_OUTPUT"
+      - name: Verify flake
+        if: steps.update.outputs.result == 'changed'
+        shell: bash
+        run: nix develop -c just check
+      - name: Commit and push
+        if: steps.update.outputs.result == 'changed'
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag=$(jq -r .tag sources.json)
+          # update-sources.ts already restricts the tag shape; this guard
+          # stays in place so a future hand-edit cannot bypass the
+          # validation before a commit lands on main.
+          if ! [[ "$tag" =~ ^rust-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            printf 'refusing tag with unexpected shape: %s\n' "$tag" >&2
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add sources.json
+          git commit -m "chore: bump codex to ${tag}"
+          git push
+      - name: Open failure issue
+        if: failure()
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const label = "update-failed";
+            const { owner, repo } = context.repo;
+            const runUrl = `https://github.com/${owner}/${repo}/actions/runs/${context.runId}`;
+            const existing = await github.rest.issues.listForRepo({
+              owner,
+              repo,
+              state: "open",
+              labels: label,
+              per_page: 1,
+            });
+            if (existing.data.length > 0) {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: existing.data[0].number,
+                body: `Another update run failed: ${runUrl}`,
+              });
+              return;
+            }
+            await github.rest.issues.create({
+              owner,
+              repo,
+              title: "Automated update workflow failed",
+              body: `The scheduled update workflow failed.\n\nSee the run log: ${runUrl}`,
+              labels: [label],
+            });
