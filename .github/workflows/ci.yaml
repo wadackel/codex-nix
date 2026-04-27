@@ -35,7 +35,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          actual=$(./result/bin/codex --version | rg -o '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+          # grep -oE is portable across BSD (macOS) and GNU grep, and the
+          # runner has it on PATH; rg is only available inside `nix develop`.
+          actual=$(./result/bin/codex --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
           expected=$(jq -re '.version' sources.json)
           printf 'codex --version: actual=%s expected=%s\n' "$actual" "$expected"
           [ "$actual" = "$expected" ] || { echo "version mismatch" >&2; exit 1; }
