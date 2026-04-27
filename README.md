@@ -1,10 +1,10 @@
 # codex-nix
 
+[![CI](https://github.com/wadackel/codex-nix/actions/workflows/ci.yaml/badge.svg)](https://github.com/wadackel/codex-nix/actions/workflows/ci.yaml)
+
 A Nix flake that packages the [OpenAI Codex CLI](https://github.com/openai/codex)
 as a prebuilt binary, with daily auto-updates and Sigstore signature
 verification on Linux.
-
-<!-- CI badge added after the first successful workflow run. -->
 
 ## Why this flake
 
