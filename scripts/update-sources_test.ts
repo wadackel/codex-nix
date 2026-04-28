@@ -1,5 +1,5 @@
 import { assert, assertEquals, assertFalse } from "jsr:@std/assert@1";
-import { buildIdentityRegex, TAG_PATTERN } from "./update-sources.ts";
+import { buildIdentityRegex, sriHash, TAG_PATTERN } from "./update-sources.ts";
 
 Deno.test("TAG_PATTERN accepts canonical stable tags", () => {
   assert(TAG_PATTERN.test("rust-v1.2.3"));
@@ -33,6 +33,24 @@ Deno.test("buildIdentityRegex pins workflow path and tag", () => {
     got,
     "^https://github\\.com/openai/codex/\\.github/workflows/rust-release\\.yml@refs/tags/rust-v0.125.0$",
   );
+});
+
+Deno.test("sriHash returns SHA-256 in the SRI format used by pkgs.fetchurl", async () => {
+  // SHA-256 of the empty byte string is well known
+  // (e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855), base64
+  // of those 32 bytes is 47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=. This is
+  // the same SRI string `nix store prefetch-file` and `nix hash file --sri`
+  // emit for an empty file.
+  const empty = new Uint8Array(0);
+  assertEquals(await sriHash(empty), "sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=");
+
+  // Round-trip property: the output must always start with `sha256-` and the
+  // base64 payload must decode back to 32 bytes.
+  const sample = new TextEncoder().encode("codex-nix");
+  const got = await sriHash(sample);
+  assert(got.startsWith("sha256-"));
+  const decoded = Uint8Array.from(atob(got.slice("sha256-".length)), (c) => c.charCodeAt(0));
+  assertEquals(decoded.byteLength, 32);
 });
 
 Deno.test("buildIdentityRegex actually matches a representative SAN URI", () => {

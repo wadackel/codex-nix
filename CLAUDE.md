@@ -32,15 +32,19 @@ scripts/
 
 ## Common commands
 
-All recipes shell into `nix develop` so they pick up the dev shell.
+The `justfile` recipes assume the dev-shell tools (`deno`, `gh`, `cosign`,
+`just`, `nixfmt`) are already on `PATH`. Either enter the shell once with
+`nix develop` and then invoke `just <recipe>`, or wrap each invocation with
+`nix develop -c just <recipe>` (the pattern CI uses). The recipes themselves
+do not re-enter `nix develop` for you.
 
-| Command          | Purpose                                                       |
-| ---------------- | ------------------------------------------------------------- |
+| Command          | Purpose                                                        |
+| ---------------- | -------------------------------------------------------------- |
 | `just update`    | Refresh `sources.json` from the latest stable upstream release |
-| `just check`     | `nix flake check` (build + checks for the current system)     |
-| `just build`     | `nix build .#codex` (smoke build)                             |
-| `just fmt`       | Format `flake.nix` with `nixfmt`                              |
-| `just test`      | `deno test scripts/`                                          |
+| `just check`     | `nix flake check` (build + checks for the current system)      |
+| `just build`     | `nix build .#codex` (smoke build)                              |
+| `just fmt`       | Format `flake.nix` with `nixfmt`                               |
+| `just test`      | `deno test scripts/`                                           |
 
 ## Conventions
 

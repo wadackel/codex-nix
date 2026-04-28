@@ -97,34 +97,32 @@ async function fetchLatestRelease(): Promise<Release> {
   return JSON.parse(new TextDecoder().decode(stdout)) as Release;
 }
 
-async function prefetch(url: string): Promise<string> {
-  const { code, stdout, stderr } = await runCmd("nix", [
-    "store",
-    "prefetch-file",
-    "--json",
-    "--refresh",
-    url,
-  ]);
-  if (code !== 0) {
-    throw new Error(
-      `nix store prefetch-file failed for ${url} (exit ${code}): ${new TextDecoder().decode(stderr)}`,
-    );
-  }
-  const parsed = JSON.parse(new TextDecoder().decode(stdout)) as { hash?: string };
-  if (typeof parsed.hash !== "string" || !parsed.hash.startsWith("sha256-")) {
-    throw new Error(
-      `nix store prefetch-file returned unexpected payload for ${url}: ${JSON.stringify(parsed)}`,
-    );
-  }
-  return parsed.hash;
-}
-
 async function downloadToBytes(url: string): Promise<Uint8Array> {
   const res = await fetch(url, { redirect: "follow" });
   if (!res.ok) {
     throw new Error(`download failed for ${url}: HTTP ${res.status}`);
   }
   return new Uint8Array(await res.arrayBuffer());
+}
+
+// Compute the SRI hash directly from already-downloaded bytes so that the
+// hash recorded in sources.json covers exactly the bytes we sigstore-verified
+// (or, on Darwin, exactly the bytes we held in memory at decision time).
+// Refetching the URL via `nix store prefetch-file` would open a TOCTOU window
+// where an upstream asset swap between the two fetches could pin bytes that
+// were never verified.
+export async function sriHash(bytes: Uint8Array): Promise<string> {
+  // crypto.subtle.digest's typings reject ArrayBufferLike-backed Uint8Array,
+  // so copy the bytes into a fresh ArrayBuffer first.
+  const buf = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buf).set(bytes);
+  const digest = await crypto.subtle.digest("SHA-256", buf);
+  let binary = "";
+  const view = new Uint8Array(digest);
+  for (let i = 0; i < view.byteLength; i += 1) {
+    binary += String.fromCharCode(view[i]);
+  }
+  return `sha256-${btoa(binary)}`;
 }
 
 async function extractBareBinary(
@@ -213,18 +211,21 @@ async function processPlatform(
   const tarballAsset = findAsset(release, tarballName);
   const binary = `codex-${spec.target}`;
 
+  // Always download the tarball into memory once; everything below — sigstore
+  // verification on Linux musl, and the SRI hash recorded in sources.json —
+  // is derived from THESE bytes. Refetching the URL elsewhere would reopen a
+  // TOCTOU window where an upstream asset swap between fetches could let
+  // sources.json pin bytes that were never sigstore-verified.
+  const tarballBytes = await downloadToBytes(tarballAsset.browser_download_url);
+  const tarballPath = `${workDir}/${tarballName}`;
+  await Deno.writeFile(tarballPath, tarballBytes);
+
   if (spec.sigstore) {
     const bundleName = `${binary}.sigstore`;
     const bundleAsset = findAsset(release, bundleName);
-
-    const tarballBytes = await downloadToBytes(tarballAsset.browser_download_url);
     const bundleBytes = await downloadToBytes(bundleAsset.browser_download_url);
-
-    const tarballPath = `${workDir}/${tarballName}`;
     const bundlePath = `${workDir}/${bundleName}`;
     const bareBinaryPath = `${workDir}/${binary}`;
-
-    await Deno.writeFile(tarballPath, tarballBytes);
     await Deno.writeFile(bundlePath, bundleBytes);
 
     const bareBinaryBytes = await extractBareBinary(tarballPath, binary);
@@ -236,7 +237,7 @@ async function processPlatform(
     console.error(`[update-sources] sigstore skipped for ${system} (no upstream bundle)`);
   }
 
-  const hash = await prefetch(tarballAsset.browser_download_url);
+  const hash = await sriHash(tarballBytes);
   return { url: tarballAsset.browser_download_url, hash, binary };
 }
 
