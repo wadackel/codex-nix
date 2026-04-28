@@ -72,8 +72,12 @@ A scheduled GitHub Actions workflow runs daily and:
    it. The cosign certificate identity is pinned to the exact upstream
    workflow path **and** the release tag, so a signature from a different
    workflow or a different tag will not verify.
-4. Computes SRI hashes via `nix store prefetch-file --refresh` and writes a
-   new `sources.json` atomically.
+4. Computes the SRI hash directly from the same in-memory tarball bytes
+   that were Sigstore-verified (or, on Darwin, the bytes held in memory
+   when the tarball was downloaded), then writes a new `sources.json`
+   atomically. The hash is therefore guaranteed to cover exactly the
+   bytes that were verified — there is no second network fetch that
+   could drift.
 5. Re-validates the tag in a shell guard before committing and pushing.
 
 If anything fails, the workflow opens an issue tagged `update-failed` and

@@ -26,8 +26,9 @@ LICENSE-CODEX              (Apache-2.0, redistributed upstream notice)
     update.yaml
   actions/setup-nix/action.yaml
 scripts/
-  update-sources.ts        (Deno; gh + tar + cosign + nix prefetch)
-  update-sources_test.ts   (tag-regex + identity-template unit tests)
+  update-sources.ts        (Deno; gh release lookup + tar member extract +
+                            cosign verify-blob + in-memory SRI hash)
+  update-sources_test.ts   (tag-regex + identity-template + sriHash tests)
 ```
 
 ## Common commands
