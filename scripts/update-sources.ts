@@ -106,11 +106,17 @@ async function downloadToBytes(url: string): Promise<Uint8Array> {
 }
 
 // Compute the SRI hash directly from already-downloaded bytes so that the
-// hash recorded in sources.json covers exactly the bytes we sigstore-verified
-// (or, on Darwin, exactly the bytes we held in memory at decision time).
-// Refetching the URL via `nix store prefetch-file` would open a TOCTOU window
-// where an upstream asset swap between the two fetches could pin bytes that
-// were never verified.
+// hash recorded in sources.json covers the same tarball download from which
+// the cosign-verified bare binary was extracted. Refetching the URL via
+// `nix store prefetch-file` would open a TOCTOU window where an upstream
+// asset swap between the two fetches could pin bytes that were never the
+// source of a verified extraction.
+//
+// Note that upstream signs the bare binary, not the tarball. The integrity
+// chain is: SRI pins the tarball; the same tarball deterministically extracts
+// to the bare binary; that binary was cosign-verified before the hash was
+// recorded. Tampering at rest would change the tarball bytes and break the
+// SRI pin in fetchurl.
 export async function sriHash(bytes: Uint8Array): Promise<string> {
   // crypto.subtle.digest's typings reject ArrayBufferLike-backed Uint8Array,
   // so copy the bytes into a fresh ArrayBuffer first.
@@ -212,10 +218,11 @@ async function processPlatform(
   const binary = `codex-${spec.target}`;
 
   // Always download the tarball into memory once; everything below — sigstore
-  // verification on Linux musl, and the SRI hash recorded in sources.json —
-  // is derived from THESE bytes. Refetching the URL elsewhere would reopen a
-  // TOCTOU window where an upstream asset swap between fetches could let
-  // sources.json pin bytes that were never sigstore-verified.
+  // verification of the bare binary on Linux musl, and the SRI hash recorded
+  // in sources.json — is derived from THESE bytes. Refetching the URL
+  // elsewhere would reopen a TOCTOU window where an upstream asset swap
+  // between fetches could let sources.json pin a tarball that did not produce
+  // a sigstore-verified extraction.
   const tarballBytes = await downloadToBytes(tarballAsset.browser_download_url);
   const tarballPath = `${workDir}/${tarballName}`;
   await Deno.writeFile(tarballPath, tarballBytes);

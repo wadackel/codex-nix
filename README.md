@@ -73,11 +73,19 @@ A scheduled GitHub Actions workflow runs daily and:
    workflow path **and** the release tag, so a signature from a different
    workflow or a different tag will not verify.
 4. Computes the SRI hash directly from the same in-memory tarball bytes
-   that were Sigstore-verified (or, on Darwin, the bytes held in memory
-   when the tarball was downloaded), then writes a new `sources.json`
-   atomically. The hash is therefore guaranteed to cover exactly the
-   bytes that were verified — there is no second network fetch that
-   could drift.
+   that were just downloaded, then writes a new `sources.json`
+   atomically. There is no second network fetch that could drift, so
+   the recorded hash is guaranteed to cover the same tarball download
+   from which the Sigstore-verified bare binary was extracted.
+
+   Note that upstream Sigstore bundles sign the **bare binary**
+   (post-extract), not the enclosing tarball. The integrity chain is
+   therefore: SRI in `sources.json` pins the tarball bytes; the same
+   tarball deterministically extracts to the bare binary; that binary
+   was cosign-verified at update time before the hash was recorded.
+   Tampering with the tarball at rest would change its hash and break
+   the pin; tampering with the binary inside would change the tarball
+   bytes and likewise break the pin.
 5. Re-validates the tag in a shell guard before committing and pushing.
 
 If anything fails, the workflow opens an issue tagged `update-failed` and
