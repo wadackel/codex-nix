@@ -102,6 +102,35 @@ Machine-generated. Each platform entry must contain `url`, `hash`, and
 `codex-x86_64-unknown-linux-musl`). Do not hand-edit; use
 `just update`.
 
+### No Nix store cache in CI
+
+`cache-nix-action` was removed and must not come back. Its cache tarball
+carries both `/nix/var/nix/db` and `/nix/store`, and `tar` treats
+per-entry hard-link failures as non-fatal, exiting non-zero only at the
+very end. The database therefore restores completely while an arbitrary
+subset of store paths does not, and every later `nix develop` dies with
+`store path ... does not exist`. Because a failed restore is only a
+warning, the job never falls back to a cache miss. The upstream trigger
+is [cache-nix-action#170](https://github.com/nix-community/cache-nix-action/issues/170),
+and `DeterminateSystems/nix-installer-action` is not in that action's
+compatible-installer list to begin with
+([#337](https://github.com/nix-community/cache-nix-action/issues/337)).
+The same configuration kept a sibling repository's scheduled workflow
+broken for 61 consecutive days. Caching bought little here anyway: the
+derivation is `fetchurl` + copy with no compile step and the devShell is
+fully binary-cached. If a store cache is ever reintroduced, do not reuse
+the `nix-v1-` key prefix.
+
+### Update failure notification
+
+A failure opens an issue labelled `update-failed`, or rewrites the title
+and body of the one already open — it never adds a comment, so the only
+notification is the initial one. The title carries the consecutive
+failure count (`(×N)`) so the severity is visible from the issue list. A
+later successful run closes that issue, which is what re-arms the
+notification: leaving one open would let the next outage land as a
+silent in-place edit.
+
 ## Out of scope
 
 - Building Codex from source (the upstream Cargo + Bazel workspace is
