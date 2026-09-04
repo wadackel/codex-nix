@@ -23,14 +23,20 @@
         let
           lib = pkgs.lib;
           system = pkgs.stdenv.hostPlatform.system;
-          platform =
+          # Each attribute is one upstream tarball; the attribute name is the
+          # name the extracted binary takes under $out/bin.
+          artifacts =
             sources.platforms.${system}
               or (throw "codex-nix: unsupported system ${system}. Supported: ${lib.concatStringsSep ", " (lib.attrNames sources.platforms)}");
         in
         pkgs.stdenvNoCC.mkDerivation {
           pname = "codex";
           version = sources.version;
-          src = pkgs.fetchurl { inherit (platform) url hash; };
+
+          # codex spawns codex-code-mode-host by looking next to its own
+          # executable, so the two binaries have to share one $out/bin rather
+          # than being separate packages joined on PATH.
+          srcs = lib.mapAttrsToList (_name: a: pkgs.fetchurl { inherit (a) url hash; }) artifacts;
 
           nativeBuildInputs = [ pkgs.makeWrapper ];
 
@@ -40,7 +46,9 @@
 
           installPhase = ''
             runHook preInstall
-            install -Dm755 ${platform.binary} $out/bin/codex
+            ${lib.concatStringsSep "\n" (
+              lib.mapAttrsToList (name: a: "install -Dm755 ${a.binary} $out/bin/${name}") artifacts
+            )}
             runHook postInstall
           '';
 

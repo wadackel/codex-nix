@@ -48,9 +48,14 @@ nix run github:wadackel/codex-nix -- --version
 }
 ```
 
-The package places the upstream binary at `$out/bin/codex` and wraps it so
-that [`ripgrep`](https://github.com/BurntSushi/ripgrep) is on `PATH` at
+The package places the upstream binaries at `$out/bin/codex` and
+`$out/bin/codex-code-mode-host`, and wraps the former so that
+[`ripgrep`](https://github.com/BurntSushi/ripgrep) is on `PATH` at
 runtime — matching what `codex` expects to spawn.
+
+`codex-code-mode-host` backs the Code Mode feature. `codex` looks for it
+next to its own executable rather than on `PATH`, so it ships in the same
+derivation; without it, Code Mode fails closed with a warning at startup.
 
 ## Configuration
 
@@ -66,12 +71,13 @@ A scheduled GitHub Actions workflow runs daily and:
 1. Calls `gh api repos/openai/codex/releases/latest` (which already filters
    out prereleases).
 2. Validates the tag against `^rust-v\d+\.\d+\.\d+$`.
-3. For each supported platform, downloads the release tarball and — on
-   Linux musl only — also downloads the matching Sigstore bundle, extracts
-   the bare binary from the tarball, and runs `cosign verify-blob` against
-   it. The cosign certificate identity is pinned to the exact upstream
-   workflow path **and** the release tag, so a signature from a different
-   workflow or a different tag will not verify.
+3. For each supported platform and each shipped binary, downloads the
+   release tarball and — on Linux musl only — also downloads the matching
+   Sigstore bundle, extracts the bare binary from the tarball, and runs
+   `cosign verify-blob` against it. The cosign certificate identity is
+   pinned to the exact upstream workflow path **and** the release tag, so
+   a signature from a different workflow or a different tag will not
+   verify.
 4. Computes the SRI hash directly from the same in-memory tarball bytes
    that were just downloaded, then writes a new `sources.json`
    atomically. There is no second network fetch that could drift, so
