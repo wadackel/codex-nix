@@ -40,11 +40,22 @@ const PLATFORMS: Record<string, PlatformSpec> = {
   "x86_64-linux": { target: "x86_64-unknown-linux-musl", sigstore: true },
 };
 
-type PlatformEntry = {
+// Each entry is simultaneously the upstream asset name prefix and the name the
+// binary gets under $out/bin, so flake.nix can install straight from the JSON
+// keys without carrying a parallel lookup table that could drift from this one.
+//
+// codex-code-mode-host is spawned by codex from its own bin/ directory, which
+// is why it has to ride along in the same derivation instead of being a
+// separate package on PATH.
+const ARTIFACTS = ["codex", "codex-code-mode-host"] as const;
+
+type ArtifactEntry = {
   url: string;
   hash: string;
   binary: string;
 };
+
+type PlatformEntry = Record<string, ArtifactEntry>;
 
 type Sources = {
   version: string;
@@ -207,15 +218,16 @@ function findAsset(release: Release, name: string): ReleaseAsset {
   return asset;
 }
 
-async function processPlatform(
+async function processArtifact(
   release: Release,
   system: string,
   spec: PlatformSpec,
+  artifact: string,
   workDir: string,
-): Promise<PlatformEntry> {
-  const tarballName = `codex-${spec.target}.tar.gz`;
+): Promise<ArtifactEntry> {
+  const binary = `${artifact}-${spec.target}`;
+  const tarballName = `${binary}.tar.gz`;
   const tarballAsset = findAsset(release, tarballName);
-  const binary = `codex-${spec.target}`;
 
   // Always download the tarball into memory once; everything below — sigstore
   // verification of the bare binary on Linux musl, and the SRI hash recorded
@@ -241,11 +253,24 @@ async function processPlatform(
     await verifySigstore(release.tag_name, bareBinaryPath, bundlePath);
     console.error(`[update-sources] sigstore verified for ${system} (${binary})`);
   } else {
-    console.error(`[update-sources] sigstore skipped for ${system} (no upstream bundle)`);
+    console.error(`[update-sources] sigstore skipped for ${system} (${binary}, no upstream bundle)`);
   }
 
   const hash = await sriHash(tarballBytes);
   return { url: tarballAsset.browser_download_url, hash, binary };
+}
+
+async function processPlatform(
+  release: Release,
+  system: string,
+  spec: PlatformSpec,
+  workDir: string,
+): Promise<PlatformEntry> {
+  const entry: PlatformEntry = {};
+  for (const artifact of ARTIFACTS) {
+    entry[artifact] = await processArtifact(release, system, spec, artifact, workDir);
+  }
+  return entry;
 }
 
 async function main(): Promise<void> {

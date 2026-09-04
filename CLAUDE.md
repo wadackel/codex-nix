@@ -97,10 +97,17 @@ tarball — to `cosign verify-blob`.
 
 ### `sources.json`
 
-Machine-generated. Each platform entry must contain `url`, `hash`, and
-`binary` (the file name inside the tarball, e.g.
-`codex-x86_64-unknown-linux-musl`). Do not hand-edit; use
-`just update`.
+Machine-generated. Each platform entry maps an artifact name to an object
+carrying `url`, `hash`, and `binary` (the file name inside the tarball,
+e.g. `codex-x86_64-unknown-linux-musl`). The artifact name is both the
+upstream asset prefix and the name the binary takes under `$out/bin`, so
+`flake.nix` installs straight from these keys and needs no separate
+lookup table. The artifact set lives in `ARTIFACTS` in
+`scripts/update-sources.ts`. Do not hand-edit; use `just update`.
+
+Note that `just update` short-circuits on a matching tag, so a change to
+the artifact set does not backfill into an already-current `sources.json`.
+Regenerating then requires an upstream tag bump.
 
 ## Out of scope
 
@@ -109,4 +116,8 @@ Machine-generated. Each platform entry must contain `url`, `hash`, and
 - Windows.
 - home-manager / nix-darwin modules.
 - Sub-binaries shipped alongside `codex` (`codex-app-server`,
-  `codex-responses-api-proxy`, etc.).
+  `codex-responses-api-proxy`, etc.), with one exception:
+  `codex-code-mode-host`. `codex` spawns it by looking next to its own
+  executable, so it cannot be a separate package joined on `PATH` — it
+  has to be installed into the same `$out/bin`, or Code Mode fails closed
+  at runtime.

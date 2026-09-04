@@ -41,6 +41,14 @@ jobs:
           expected=$(jq -re '.version' sources.json)
           printf 'codex --version: actual=%s expected=%s\n' "$actual" "$expected"
           [ "$actual" = "$expected" ] || { echo "version mismatch" >&2; exit 1; }
+      - name: Smoke run codex-code-mode-host --help
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The host has no --version flag; --help is the cheapest proof that
+          # the second binary landed in the same bin/ and is executable, which
+          # is what codex needs to spawn it.
+          ./result/bin/codex-code-mode-host --help | grep -q 'codex-code-mode-host'
       - name: Deno unit tests
         shell: bash
         run: nix develop -c deno test scripts/
