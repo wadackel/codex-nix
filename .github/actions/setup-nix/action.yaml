@@ -1,15 +1,9 @@
 name: Setup Nix
 description: Install Nix with the Determinate Systems installer.
 
-# Note on caching: an earlier revision of this action used
-# nix-community/cache-nix-action, but its store-GC step intermittently
-# evicted .drv files that subsequent `nix flake check` / `nix develop`
-# invocations still needed, producing
-# "error: store path '...isl-0.24.tar.bz2.drv' does not exist" failures
-# on cold-restore runs. The flake is small enough that re-fetching from
-# the public binary cache each run is cheaper than maintaining a custom
-# store cache, so the cache layer was removed.
-
+# No Nix store cache step here: a partially restored store keeps its database
+# intact while dropping paths, so every later `nix develop` dies on the first
+# missing one. Cold runs cost about a minute for this repo. See CLAUDE.md.
 runs:
   using: composite
   steps:
