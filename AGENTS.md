@@ -1,4 +1,4 @@
-# CLAUDE.md
+# AGENTS.md
 
 Guidance for working in this repository.
 
@@ -52,7 +52,7 @@ do not re-enter `nix develop` for you.
 ### Language
 
 **All artifacts in this repository are written in English.** This applies
-to source code, comments, documentation, README, CLAUDE.md, commit
+to source code, comments, documentation, README, AGENTS.md, commit
 messages, pull request descriptions, GitHub issues opened by the update
 workflow, and workflow / step names.
 
