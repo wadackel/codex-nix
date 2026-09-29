@@ -1,52 +1,52 @@
 {
-  "version": "0.158.0",
-  "tag": "rust-v0.158.0",
+  "version": "0.159.0",
+  "tag": "rust-v0.159.0",
   "platforms": {
     "aarch64-darwin": {
       "codex": {
-        "url": "https://github.com/openai/codex/releases/download/rust-v0.158.0/codex-aarch64-apple-darwin.tar.gz",
-        "hash": "sha256-NBxKCPnOGTWzAHN23Co9UKCokRKTDppHSuYTZyGPboo=",
+        "url": "https://github.com/openai/codex/releases/download/rust-v0.159.0/codex-aarch64-apple-darwin.tar.gz",
+        "hash": "sha256-l2/+A8LQZOvrWpAPUjxNSjafKZtRk+IjLPwFpkJznTM=",
         "binary": "codex-aarch64-apple-darwin"
       },
       "codex-code-mode-host": {
-        "url": "https://github.com/openai/codex/releases/download/rust-v0.158.0/codex-code-mode-host-aarch64-apple-darwin.tar.gz",
-        "hash": "sha256-GTY5GNp19dK4Bbb/+v2E6jyJduA+dRGSwErqW9cNSrQ=",
+        "url": "https://github.com/openai/codex/releases/download/rust-v0.159.0/codex-code-mode-host-aarch64-apple-darwin.tar.gz",
+        "hash": "sha256-QLVWNv+d0foBAUPhE1HG01b+s/jKzaveWSKC8iaL4Qo=",
         "binary": "codex-code-mode-host-aarch64-apple-darwin"
       }
     },
     "x86_64-darwin": {
       "codex": {
-        "url": "https://github.com/openai/codex/releases/download/rust-v0.158.0/codex-x86_64-apple-darwin.tar.gz",
-        "hash": "sha256-uzmD1F9TyuFQx3mJk3SL51zdl3TGDR8oTAndKKkZ4Gk=",
+        "url": "https://github.com/openai/codex/releases/download/rust-v0.159.0/codex-x86_64-apple-darwin.tar.gz",
+        "hash": "sha256-bHGsk6hxlvgDA8PiOorFWakqLzDdief2hIB0qrYVt/4=",
         "binary": "codex-x86_64-apple-darwin"
       },
       "codex-code-mode-host": {
-        "url": "https://github.com/openai/codex/releases/download/rust-v0.158.0/codex-code-mode-host-x86_64-apple-darwin.tar.gz",
-        "hash": "sha256-tKfs2YCPC8tnPz+3AmFSjGRv2wruH4l5hVDKj36jG0g=",
+        "url": "https://github.com/openai/codex/releases/download/rust-v0.159.0/codex-code-mode-host-x86_64-apple-darwin.tar.gz",
+        "hash": "sha256-SmMcGKlMNSV3gDW5flxuooaFTp2DXZCoS+ZRAjq/jQA=",
         "binary": "codex-code-mode-host-x86_64-apple-darwin"
       }
     },
     "aarch64-linux": {
       "codex": {
-        "url": "https://github.com/openai/codex/releases/download/rust-v0.158.0/codex-aarch64-unknown-linux-musl.tar.gz",
-        "hash": "sha256-keP6/l/4Raj2haBdBJGRRvsw/ckkWvGkKi9/I5lZ6Qw=",
+        "url": "https://github.com/openai/codex/releases/download/rust-v0.159.0/codex-aarch64-unknown-linux-musl.tar.gz",
+        "hash": "sha256-FqTnXYDnYo+iPao9lJRC+8/5VYdVGdfVeI80HuhfwW0=",
         "binary": "codex-aarch64-unknown-linux-musl"
       },
       "codex-code-mode-host": {
-        "url": "https://github.com/openai/codex/releases/download/rust-v0.158.0/codex-code-mode-host-aarch64-unknown-linux-musl.tar.gz",
-        "hash": "sha256-VBvr7IR2WtDSGjWRvtGOJR3BzxZM7yA+BQAvsEWrHOw=",
+        "url": "https://github.com/openai/codex/releases/download/rust-v0.159.0/codex-code-mode-host-aarch64-unknown-linux-musl.tar.gz",
+        "hash": "sha256-SwnIrL047bUIDvi696Qp/LuV22s59m3Mj8N6/thsTrY=",
         "binary": "codex-code-mode-host-aarch64-unknown-linux-musl"
       }
     },
     "x86_64-linux": {
       "codex": {
-        "url": "https://github.com/openai/codex/releases/download/rust-v0.158.0/codex-x86_64-unknown-linux-musl.tar.gz",
-        "hash": "sha256-r59apuZmKsz51wfO8NnKCDiAoXOpwrbCKUftt4MOV3g=",
+        "url": "https://github.com/openai/codex/releases/download/rust-v0.159.0/codex-x86_64-unknown-linux-musl.tar.gz",
+        "hash": "sha256-blh6CMs5WZgWxZiwfhe0vL+dQbXBwHk6S2MrZ0Hpy8A=",
         "binary": "codex-x86_64-unknown-linux-musl"
       },
       "codex-code-mode-host": {
-        "url": "https://github.com/openai/codex/releases/download/rust-v0.158.0/codex-code-mode-host-x86_64-unknown-linux-musl.tar.gz",
-        "hash": "sha256-VFXGS+S6NxREcQiVr/bXTWU5haO/xFSot/5C1ubRHj0=",
+        "url": "https://github.com/openai/codex/releases/download/rust-v0.159.0/codex-code-mode-host-x86_64-unknown-linux-musl.tar.gz",
+        "hash": "sha256-+dIpaeeT1zIPnKDCwODQ7GVACsdVziC4CbZDaZhb6Uc=",
         "binary": "codex-code-mode-host-x86_64-unknown-linux-musl"
       }
     }
