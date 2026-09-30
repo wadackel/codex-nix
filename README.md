@@ -12,7 +12,7 @@ verification on Linux.
 - Keep the supply-chain trust boundary minimal by self-hosting the packaging
   rather than depending on a community flake.
 - Verify Linux musl artifacts against their Sigstore bundles at update time so
-  the SRI hashes that ship in `sources.json` cover signed binaries only.
+  the SRI hashes that ship in `sources.json` cover signed tarballs only.
 
 ## Supported systems
 
@@ -48,14 +48,21 @@ nix run github:wadackel/codex-nix -- --version
 }
 ```
 
-The package places the upstream binaries at `$out/bin/codex` and
-`$out/bin/codex-code-mode-host`, and wraps the former so that
-[`ripgrep`](https://github.com/BurntSushi/ripgrep) is on `PATH` at
-runtime — matching what `codex` expects to spawn.
+The package unpacks upstream's complete Codex package
+(`codex-package-<target>.tar.gz`) unchanged into `$out/libexec/codex` and
+links `$out/bin/codex` to its `bin/codex`. The package carries
+`codex-code-mode-host`, a bundled `rg`, and the other helpers that `codex`
+looks up relative to its own executable, plus the `codex-package.json`
+manifest. The background app-server daemon that `codex` starts by default
+installs itself from that tree, and without it `codex` fails with
+"this CLI has no complete local package".
 
-`codex-code-mode-host` backs the Code Mode feature. `codex` looks for it
-next to its own executable rather than on `PATH`, so it ships in the same
-derivation; without it, Code Mode fails closed with a warning at startup.
+The daemon runs from its own copy under
+`$CODEX_HOME/packages/app-server-daemon`, not from the Nix store, and by
+default updates that copy from upstream releases on its own schedule, so it
+can run a newer version than the `codex` this flake pins. Run
+`codex --no-daemon`, or set `features.daemon_auto_start = false` in
+`config.toml`, to keep everything on the pinned version.
 
 ## Configuration
 
@@ -71,27 +78,16 @@ A scheduled GitHub Actions workflow runs daily and:
 1. Calls `gh api repos/openai/codex/releases/latest` (which already filters
    out prereleases).
 2. Validates the tag against `^rust-v\d+\.\d+\.\d+$`.
-3. For each supported platform and each shipped binary, downloads the
-   release tarball and — on Linux musl only — also downloads the matching
-   Sigstore bundle, extracts the bare binary from the tarball, and runs
-   `cosign verify-blob` against it. The cosign certificate identity is
-   pinned to the exact upstream workflow path **and** the release tag, so
-   a signature from a different workflow or a different tag will not
-   verify.
+3. For each supported platform, downloads the package tarball and — on
+   Linux musl only — also downloads the matching Sigstore bundle and runs
+   `cosign verify-blob` against the tarball. The cosign certificate
+   identity is pinned to the exact upstream workflow path **and** the
+   release tag, so a signature from a different workflow or a different
+   tag will not verify.
 4. Computes the SRI hash directly from the same in-memory tarball bytes
-   that were just downloaded, then writes a new `sources.json`
-   atomically. There is no second network fetch that could drift, so
-   the recorded hash is guaranteed to cover the same tarball download
-   from which the Sigstore-verified bare binary was extracted.
-
-   Note that upstream Sigstore bundles sign the **bare binary**
-   (post-extract), not the enclosing tarball. The integrity chain is
-   therefore: SRI in `sources.json` pins the tarball bytes; the same
-   tarball deterministically extracts to the bare binary; that binary
-   was cosign-verified at update time before the hash was recorded.
-   Tampering with the tarball at rest would change its hash and break
-   the pin; tampering with the binary inside would change the tarball
-   bytes and likewise break the pin.
+   that were just verified, then writes a new `sources.json` atomically.
+   There is no second network fetch that could drift, so the recorded hash
+   is guaranteed to cover the Sigstore-verified bytes.
 5. Re-validates the tag in a shell guard before committing and pushing.
 
 If anything fails, the workflow opens an issue tagged `update-failed` and

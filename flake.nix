@@ -23,9 +23,7 @@
         let
           lib = pkgs.lib;
           system = pkgs.stdenv.hostPlatform.system;
-          # Each attribute is one upstream tarball; the attribute name is the
-          # name the extracted binary takes under $out/bin.
-          artifacts =
+          source =
             sources.platforms.${system}
               or (throw "codex-nix: unsupported system ${system}. Supported: ${lib.concatStringsSep ", " (lib.attrNames sources.platforms)}");
         in
@@ -33,28 +31,26 @@
           pname = "codex";
           version = sources.version;
 
-          # codex spawns codex-code-mode-host by looking next to its own
-          # executable, so the two binaries have to share one $out/bin rather
-          # than being separate packages joined on PATH.
-          srcs = lib.mapAttrsToList (_name: a: pkgs.fetchurl { inherit (a) url hash; }) artifacts;
+          src = pkgs.fetchurl { inherit (source) url hash; };
 
-          nativeBuildInputs = [ pkgs.makeWrapper ];
-
-          sourceRoot = ".";
+          dontUnpack = true;
           dontConfigure = true;
           dontBuild = true;
+          # The app-server daemon copies this tree into $CODEX_HOME and refuses
+          # to start unless the copied bin/codex is identical to the running
+          # one, and the bundled bwrap is checked against a pinned digest. Any
+          # strip, patchelf or wrapProgram step would break one or the other.
+          dontFixup = true;
 
+          # bin/codex is symlinked rather than being the package root's bin/,
+          # because codex finds codex-package.json from the canonical path of
+          # its own executable, and $out/bin should hold only what goes on PATH.
           installPhase = ''
             runHook preInstall
-            ${lib.concatStringsSep "\n" (
-              lib.mapAttrsToList (name: a: "install -Dm755 ${a.binary} $out/bin/${name}") artifacts
-            )}
+            mkdir -p $out/libexec/codex $out/bin
+            tar -xzf $src -C $out/libexec/codex
+            ln -s ../libexec/codex/bin/codex $out/bin/codex
             runHook postInstall
-          '';
-
-          postFixup = ''
-            wrapProgram $out/bin/codex \
-              --prefix PATH : ${lib.makeBinPath [ pkgs.ripgrep ]}
           '';
 
           meta = with lib; {
