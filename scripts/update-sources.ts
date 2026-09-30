@@ -40,22 +40,16 @@ const PLATFORMS: Record<string, PlatformSpec> = {
   "x86_64-linux": { target: "x86_64-unknown-linux-musl", sigstore: true },
 };
 
-// Each entry is simultaneously the upstream asset name prefix and the name the
-// binary gets under $out/bin, so flake.nix can install straight from the JSON
-// keys without carrying a parallel lookup table that could drift from this one.
-//
-// codex-code-mode-host is spawned by codex from its own bin/ directory, which
-// is why it has to ride along in the same derivation instead of being a
-// separate package on PATH.
-const ARTIFACTS = ["codex", "codex-code-mode-host"] as const;
+// The per-binary tarballs (codex-<target>.tar.gz and friends) are not used:
+// codex only starts its background app-server daemon from a complete package
+// tree (codex-package.json, bin/, codex-path/, codex-resources/), and fails
+// with "this CLI has no complete local package" otherwise.
+const PACKAGE_ASSET_PREFIX = "codex-package";
 
-type ArtifactEntry = {
+type PlatformEntry = {
   url: string;
   hash: string;
-  binary: string;
 };
-
-type PlatformEntry = Record<string, ArtifactEntry>;
 
 type Sources = {
   version: string;
@@ -117,17 +111,10 @@ async function downloadToBytes(url: string): Promise<Uint8Array> {
 }
 
 // Compute the SRI hash directly from already-downloaded bytes so that the
-// hash recorded in sources.json covers the same tarball download from which
-// the cosign-verified bare binary was extracted. Refetching the URL via
-// `nix store prefetch-file` would open a TOCTOU window where an upstream
-// asset swap between the two fetches could pin bytes that were never the
-// source of a verified extraction.
-//
-// Note that upstream signs the bare binary, not the tarball. The integrity
-// chain is: SRI pins the tarball; the same tarball deterministically extracts
-// to the bare binary; that binary was cosign-verified before the hash was
-// recorded. Tampering at rest would change the tarball bytes and break the
-// SRI pin in fetchurl.
+// hash recorded in sources.json covers the same tarball download that was
+// cosign-verified. Refetching the URL via `nix store prefetch-file` would open
+// a TOCTOU window where an upstream asset swap between the two fetches could
+// pin bytes that were never verified.
 export async function sriHash(bytes: Uint8Array): Promise<string> {
   // crypto.subtle.digest's typings reject ArrayBufferLike-backed Uint8Array,
   // so copy the bytes into a fresh ArrayBuffer first.
@@ -142,32 +129,9 @@ export async function sriHash(bytes: Uint8Array): Promise<string> {
   return `sha256-${btoa(binary)}`;
 }
 
-async function extractBareBinary(
-  tarballPath: string,
-  binaryName: string,
-): Promise<Uint8Array> {
-  // -O streams a single member to stdout; -x extracts; -z auto-detects gzip.
-  // The tarball is flat (no nested directory), so the member name equals
-  // the binary name.
-  const { code, stdout, stderr } = await runCmd("tar", [
-    "-xzOf",
-    tarballPath,
-    binaryName,
-  ]);
-  if (code !== 0) {
-    throw new Error(
-      `tar extraction failed for ${binaryName} (exit ${code}): ${new TextDecoder().decode(stderr)}`,
-    );
-  }
-  if (stdout.byteLength === 0) {
-    throw new Error(`tar produced empty output for ${binaryName}`);
-  }
-  return stdout;
-}
-
 async function verifySigstore(
   tag: string,
-  binaryPath: string,
+  blobPath: string,
   bundlePath: string,
 ): Promise<void> {
   const { code, stdout, stderr } = await runCmd("cosign", [
@@ -178,11 +142,11 @@ async function verifySigstore(
     buildIdentityRegex(tag),
     "--certificate-oidc-issuer",
     COSIGN_OIDC_ISSUER,
-    binaryPath,
+    blobPath,
   ]);
   if (code !== 0) {
     throw new Error(
-      `cosign verify-blob failed for ${binaryPath} (exit ${code}):\n` +
+      `cosign verify-blob failed for ${blobPath} (exit ${code}):\n` +
         `  stdout: ${new TextDecoder().decode(stdout)}\n` +
         `  stderr: ${new TextDecoder().decode(stderr)}`,
     );
@@ -218,59 +182,38 @@ function findAsset(release: Release, name: string): ReleaseAsset {
   return asset;
 }
 
-async function processArtifact(
-  release: Release,
-  system: string,
-  spec: PlatformSpec,
-  artifact: string,
-  workDir: string,
-): Promise<ArtifactEntry> {
-  const binary = `${artifact}-${spec.target}`;
-  const tarballName = `${binary}.tar.gz`;
-  const tarballAsset = findAsset(release, tarballName);
-
-  // Always download the tarball into memory once; everything below — sigstore
-  // verification of the bare binary on Linux musl, and the SRI hash recorded
-  // in sources.json — is derived from THESE bytes. Refetching the URL
-  // elsewhere would reopen a TOCTOU window where an upstream asset swap
-  // between fetches could let sources.json pin a tarball that did not produce
-  // a sigstore-verified extraction.
-  const tarballBytes = await downloadToBytes(tarballAsset.browser_download_url);
-  const tarballPath = `${workDir}/${tarballName}`;
-  await Deno.writeFile(tarballPath, tarballBytes);
-
-  if (spec.sigstore) {
-    const bundleName = `${binary}.sigstore`;
-    const bundleAsset = findAsset(release, bundleName);
-    const bundleBytes = await downloadToBytes(bundleAsset.browser_download_url);
-    const bundlePath = `${workDir}/${bundleName}`;
-    const bareBinaryPath = `${workDir}/${binary}`;
-    await Deno.writeFile(bundlePath, bundleBytes);
-
-    const bareBinaryBytes = await extractBareBinary(tarballPath, binary);
-    await Deno.writeFile(bareBinaryPath, bareBinaryBytes);
-
-    await verifySigstore(release.tag_name, bareBinaryPath, bundlePath);
-    console.error(`[update-sources] sigstore verified for ${system} (${binary})`);
-  } else {
-    console.error(`[update-sources] sigstore skipped for ${system} (${binary}, no upstream bundle)`);
-  }
-
-  const hash = await sriHash(tarballBytes);
-  return { url: tarballAsset.browser_download_url, hash, binary };
-}
-
 async function processPlatform(
   release: Release,
   system: string,
   spec: PlatformSpec,
   workDir: string,
 ): Promise<PlatformEntry> {
-  const entry: PlatformEntry = {};
-  for (const artifact of ARTIFACTS) {
-    entry[artifact] = await processArtifact(release, system, spec, artifact, workDir);
+  const tarballName = `${PACKAGE_ASSET_PREFIX}-${spec.target}.tar.gz`;
+  const tarballAsset = findAsset(release, tarballName);
+
+  // Always download the tarball into memory once; both the sigstore
+  // verification on Linux musl and the SRI hash recorded in sources.json are
+  // derived from THESE bytes. Refetching the URL elsewhere would reopen a
+  // TOCTOU window where an upstream asset swap between fetches could let
+  // sources.json pin a tarball that was never verified.
+  const tarballBytes = await downloadToBytes(tarballAsset.browser_download_url);
+  const tarballPath = `${workDir}/${tarballName}`;
+  await Deno.writeFile(tarballPath, tarballBytes);
+
+  if (spec.sigstore) {
+    const bundleName = `${tarballName}.sigstore`;
+    const bundleAsset = findAsset(release, bundleName);
+    const bundlePath = `${workDir}/${bundleName}`;
+    await Deno.writeFile(bundlePath, await downloadToBytes(bundleAsset.browser_download_url));
+
+    await verifySigstore(release.tag_name, tarballPath, bundlePath);
+    console.error(`[update-sources] sigstore verified for ${system} (${tarballName})`);
+  } else {
+    console.error(`[update-sources] sigstore skipped for ${system} (${tarballName}, no upstream bundle)`);
   }
-  return entry;
+
+  const hash = await sriHash(tarballBytes);
+  return { url: tarballAsset.browser_download_url, hash };
 }
 
 async function main(): Promise<void> {

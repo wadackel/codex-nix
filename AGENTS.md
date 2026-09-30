@@ -5,7 +5,7 @@ Guidance for working in this repository.
 ## Project intent
 
 A small Nix flake that mirrors the upstream [OpenAI Codex CLI](https://github.com/openai/codex)
-prebuilt binaries with daily auto-updates and Sigstore signature
+prebuilt package with daily auto-updates and Sigstore signature
 verification on Linux. The goals are (a) staying close to upstream
 releases and (b) keeping the supply-chain trust boundary minimal.
 
@@ -26,8 +26,8 @@ LICENSE-CODEX              (Apache-2.0, redistributed upstream notice)
     update.yaml
   actions/setup-nix/action.yaml
 scripts/
-  update-sources.ts        (Deno; gh release lookup + tar member extract +
-                            cosign verify-blob + in-memory SRI hash)
+  update-sources.ts        (Deno; gh release lookup + cosign verify-blob +
+                            in-memory SRI hash)
   update-sources_test.ts   (tag-regex + identity-template + sriHash tests)
 ```
 
@@ -89,25 +89,32 @@ of a signature from a different release tag. The OIDC issuer is fixed to
 
 ### Sigstore bundle target
 
-Sigstore bundles published upstream sign the **bare binary** that
-preceded tarball compression (the upstream `linux-code-sign` action runs
-`cosign sign-blob` before `tar czf`). The update script therefore
-extracts the binary from the tarball and passes that file — not the
-tarball — to `cosign verify-blob`.
+Upstream publishes a Sigstore bundle for the Linux musl package tarball
+itself (`codex-package-<target>.tar.gz.sigstore`), so the update script
+passes the downloaded tarball straight to `cosign verify-blob`. Darwin
+packages have no bundle.
 
 ### `sources.json`
 
-Machine-generated. Each platform entry maps an artifact name to an object
-carrying `url`, `hash`, and `binary` (the file name inside the tarball,
-e.g. `codex-x86_64-unknown-linux-musl`). The artifact name is both the
-upstream asset prefix and the name the binary takes under `$out/bin`, so
-`flake.nix` installs straight from these keys and needs no separate
-lookup table. The artifact set lives in `ARTIFACTS` in
-`scripts/update-sources.ts`. Do not hand-edit; use `just update`.
+Machine-generated. Each platform entry carries the `url` and SRI `hash` of
+upstream's `codex-package-<target>.tar.gz`. Do not hand-edit; use
+`just update`.
 
 Note that `just update` short-circuits on a matching tag, so a change to
-the artifact set does not backfill into an already-current `sources.json`.
-Regenerating then requires an upstream tag bump.
+what the script records does not backfill into an already-current
+`sources.json`. Delete `sources.json` and run `just update` to regenerate it.
+
+### Package layout
+
+`flake.nix` unpacks the package into `$out/libexec/codex` without any fixup
+and links `$out/bin/codex` to it. Keep it that way:
+
+- `codex` canonicalizes its own path and needs `bin/codex` to sit next to
+  `codex-package.json`, `codex-path/` and `codex-resources/`; the
+  app-server daemon it starts by default refuses to run otherwise.
+- The daemon copies the whole tree into `$CODEX_HOME` and checks that the
+  copy's `bin/codex` is identical to the running executable, so no
+  `wrapProgram`, strip or patchelf step may touch it.
 
 ## Out of scope
 
@@ -115,9 +122,5 @@ Regenerating then requires an upstream tag bump.
   large and slow; tracking pre-built binaries is the entire point).
 - Windows.
 - home-manager / nix-darwin modules.
-- Sub-binaries shipped alongside `codex` (`codex-app-server`,
-  `codex-responses-api-proxy`, etc.), with one exception:
-  `codex-code-mode-host`. `codex` spawns it by looking next to its own
-  executable, so it cannot be a separate package joined on `PATH` — it
-  has to be installed into the same `$out/bin`, or Code Mode fails closed
-  at runtime.
+- Other upstream packages and sub-binaries (`codex-app-server-package`,
+  `codex-responses-api-proxy`, etc.).
