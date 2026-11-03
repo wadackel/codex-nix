@@ -13,7 +13,7 @@ description: Install Nix with the Determinate Systems installer.
 runs:
   using: composite
   steps:
-    - uses: DeterminateSystems/nix-installer-action@v22
+    - uses: DeterminateSystems/nix-installer-action@v23
       with:
         # v21 changed the default to `true`. Keep upstream Nix behavior.
         determinate: false
