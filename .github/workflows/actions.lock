@@ -5,11 +5,11 @@ version: 'v0.0.3'
 workflows:
     '.github/workflows/ci.yaml':
         - 'actions/checkout@v6.0.2'
-        - 'determinatesystems/nix-installer-action@v22'
+        - 'determinatesystems/nix-installer-action@v23'
     '.github/workflows/update.yaml':
         - 'actions/checkout@v6.0.2'
         - 'actions/github-script@v9.0.0'
-        - 'determinatesystems/nix-installer-action@v22'
+        - 'determinatesystems/nix-installer-action@v23'
     '.github/workflows/verify-lockfile.yaml':
         - 'actions/checkout@v7.0.1'
 dependencies:
@@ -28,8 +28,8 @@ dependencies:
         commit: 'sha1-3a2844b7e9c422d3c10d287c895573f7108da1b3'
         owner_id: 44036562
         repo_id: 205262760
-    'determinatesystems/nix-installer-action@v22':
-        ref: 'v22'
-        commit: 'sha1-ef8a148080ab6020fd15196c2084a2eea5ff2d25'
+    'determinatesystems/nix-installer-action@v23':
+        ref: 'v23'
+        commit: 'sha1-3138316df39ed29be04236d7ffc686fa525866aa'
         owner_id: 80991770
         repo_id: 588678074
